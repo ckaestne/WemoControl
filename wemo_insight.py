@@ -1,19 +1,10 @@
 #!/usr/bin/python
 #-------#--------#-----------#------------#----------------
 # Wemo Control Script 
-# Version 0.0.2
+# Version 0.0.4
 # Remotely gathers sample data from belkin Wemo Insight devices 
-# Product of Synergy labs
-# Version 0.0.3
-# Remotely gathers sample data from belkin Wemo Insight devices 
-# Product of Synergy labs
+# Product of Synergy labs, Christian Kaestner
 
-#-------#--------#-----------#------------#-----------------
-#
-# We define a class of Wemo Thread which is our backbone structure of Wemo threads
-# Each thread uniquely identifies a wemo Insight device located in a building
-# The thread collects the sample data over the time and stores it locally on the file
-#------*----------*-----------*-----------*----------*------
 
 # Modules to import 
 import urllib2,datetime,socket
@@ -21,117 +12,51 @@ import time,sys,os,re,atexit
 from signal import SIGTERM
 #---------------------------------SOAP-BODY-----------------------------------------------------------------
 
-BODY_GETALL='''<?xml version="1.0" encoding="utf-8"?>
+class InsightMethod:
+    def __init__(self, fun, service, param, returnParamName=None):
+        self.request='''<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
     <s:Body>
-        <u:GetInsightParams xmlns:u="urn:Belkin:service:insight:1">
-            <InsightParams>
-            </InsightParams>
-        </u:GetInsightParams>
+        <u:'''+fun+''' xmlns:u="urn:Belkin:service:'''+service+''':1">
+            '''+param+'''
+        </u:'''+fun+'''>
     </s:Body>
 </s:Envelope>'''
-BODY_GETMANU = '''
-<?xml version="1.0" encoding="utf-8"?>
-    <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-        <s:Body>
-            <u:GetManufactureData xmlns:u="urn:Belkin:service:manufacture:1">
-                <ManufactureData>
-                </ManufactureData>
-            </u:GetManufactureData>
-        </s:Body>
-    </s:Envelope>
-'''
-BODY_GETSTATE = '''
-<?xml version="1.0" encoding="utf-8"?>
-    <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-        <s:Body>
-            <u:GetBinaryState xmlns:u="urn:Belkin:service:basicevent:1">
-                <BinaryState>
-                    1
-                </BinaryState>
-            </u:GetBinaryState>
-        </s:Body>
-    </s:Envelope>
-'''
-
-BODY_ON = '''
-<?xml version="1.0" encoding="utf-8"?>
-    <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-        <s:Body>
-            <u:SetBinaryState xmlns:u="urn:Belkin:service:basicevent:1">
-                <BinaryState>
-                    1
-                </BinaryState>
-            </u:SetBinaryState>
-        </s:Body>
-    </s:Envelope>
-'''
+        self.httpdir="/upnp/control/"+service+"1"
+        self.header= {"Accept":"",
+                    "Content-Type": "text/xml; charset=\"utf-8\"",
+                    "SOAPACTION": "\"urn:Belkin:service:"+service+":1#"+fun+"\""}
+        self.returnParamName=returnParamName
+ 
+    def call(self):
+        global IP
+        global PORT
+        global FAILCOUNT
+        url = "http://"+IP+":"+PORT+self.httpdir
+        try:
+            req = urllib2.Request(url, self.request, self.header)
+            # error("#send "+url+"\n"+str(self.request))
+            data= urllib2.urlopen(req,None,5).read()
+            # error("#received "+data)
+            FAILCOUNT = 0
+            if data!=None and self.returnParamName!=None:
+                data = re.search(r'\<'+self.returnParamName+r'\>(.*)\</'+self.returnParamName+r'\>',data).group(1)
+            return data
+        except Exception, e:
+            return handleException(e)
 
 
-#------------------------------*-------------------------------*-----------------------------------------------
 
-#---------------------------------SOAP-ALLOWED-PORTS---------------------------------------------------------------------
-
-#URL_GETALL = "http://128.237.230.120:49153/upnp/control/insight1"
-#URL_GETMANU = "http://128.237.230.120:49153/upnp/control/manufacture1"
-
-PORT = "49153"
-HTTP = "http://"
+PORT = "49152"
 IP = "0"
 FAILCOUNT = 0
-#------------------------------*-------------------------------*-----------------------------------------------
 
-#---------------------------------SOAP-HEADER------------------------------------------------------------------
-
-HEADER_GETALL = {"Accept":"",
-                "Content-Type": "text/xml; charset=\"utf-8\"",
-                "SOAPACTION": "\"urn:Belkin:service:insight:1#GetInsightParams\""}
-HEADER_GETSTATE = {"Accept":"",
-                "Content-Type": "text/xml; charset=\"utf-8\"",
-                "SOAPACTION": "\"urn:Belkin:service:basicevent:1#GetBinaryState\""}
-HEADER_GETMANU = {"Accept":"",
-                "Content-Type": "text/xml; charset=\"utf-8\"",
-                "SOAPACTION": "\"urn:Belkin:service:manufacture:1#GetManufactureData\""}
-HEADER_ON = {"Accept":"",
-                "Content-Type": "text/xml; charset=\"utf-8\"",
-                "SOAPACTION": "\"urn:Belkin:service:basicevent:1#SetBinaryState\""}
-#-----------------------------*-------------------------------*-------------------------------------------
-
-#---------------------------------------GET-PARAMS-FUNCTIONS----------------------------------------------
 def read_sensors():
-    global HOST
-    global IP
-    global PORT
     global FAILCOUNT
-    DIR = "/upnp/control/insight1"
-    URL_GETALL =  HTTP+IP+":"+PORT+DIR
-    try:
-        req = urllib2.Request(URL_GETALL,BODY_GETALL,HEADER_GETALL)  
-        data= urllib2.urlopen(req,None,5).read()
-        params = re.search(r'\<InsightParams\>(.*)\</InsightParams\>',data).group(1)
-        get_all_params = parse_params_getall(params)
-        FAILCOUNT = 0
-        return get_all_params + " -- " + params
-    except Exception, e:
-        return handleException(e)
-
-
-def turn_on():
-    global IP
-    global HOST
-    global PORT
-    global FAILCOUNT
-    DIR = "/upnp/control/basicevent1"
-    URL_ON =  HTTP+IP+":"+PORT+DIR
-    try:
-        req = urllib2.Request(URL_ON,BODY_ON,HEADER_ON)  
-        data= urllib2.urlopen(req,None,5).read()
-        params = re.search(r'\<BinaryState\>(.*)\</BinaryState\>',data).group(1)
-        FAILCOUNT = 0
-        error("#debug "+params)
-        return params
-    except Exception, e:
-        return handleException(e)
+    data = getAll.call()
+    if data != None:
+        return parse_params_getall(data)
+    return None
 
      
 # measurement or turn_on has just failed.
@@ -168,35 +93,71 @@ def handleException(exception):
 #-----------------------------*------------------------------*-----------------------------------------------
 
 def parse_params_getall(data):
-        try:
-            param = data.split("|")
-            state = param[0]
-            currentmw = param[7]
-            currenttime= time.strftime("%Y-%m-%d %H:%M:%S")
-            string = str(currenttime) + ", " + currentmw+", "+state
-            return string
-        except Exception, e:
-            print str(e)
-            return None
+    try:
+        p = data.split("|")
+        # r = "state="+p[0]
+        # r = r + " secondsSinceStateChange="+p[1]
+        # r = r + " lastOn="+str(time.strftime("%Y-%m-%d %H:%M:%S",time.gmtime(int(p[2]))))
+        # r = r + " secondsOnToday="+p[3]
+        # r = r + " secondsOnTwoWeeks="+p[4]
+        # r = r + " secondsOnTotal="+p[5]
+        # r = r + " averagePowerW="+p[6]
+        # r = r + " instantPowerMW="+p[7]
+        # r = r + " powerTodayMWS="+p[8]
+        # r = r + " energyTwoWeeksMWS="+p[9]
+        # currenttime= time.strftime("%Y-%m-%d %H:%M:%S")
+        # string = str(currenttime) + ", " + r
+        # return string
+        return str(p[7])
+    except Exception, e:
+        print str(e)
+        return None
 
 
 
 #----------------------------------------------------------------------------------------------------------------
+getAll = InsightMethod("GetInsightParams","insight", "<InsightParams></InsightParams>","InsightParams")
+isOn = InsightMethod("GetBinaryState","basicevent","<BinaryState>1</BinaryState>")
+turnOn = InsightMethod("SetBinaryState","basicevent","<BinaryState>1</BinaryState>")
+getName = InsightMethod("GetFriendlyName","basicevent","","FriendlyName")
+getHomeId = InsightMethod("GetHomeId","basicevent","","HomeId")
+getMacAddr= InsightMethod("GetMacAddr","basicevent","","MacAddr")
+getSerialNo=InsightMethod("GetMacAddr","basicevent","","SerialNo")
+getLogFileURL=InsightMethod("GetLogFileURL","basicevent","","LOGURL")
+setPowerThreshold0 = InsightMethod("SetPowerThreshold","insight","<PowerThreshold>0</PowerThreshold>","PowerThreshold")  
+getPowerThreshold=InsightMethod("GetPowerThreshold","insight","<PowerThreshold></PowerThreshold>","PowerThreshold")
+getInsightParams=InsightMethod("GetInsightParams","insight","","InsightParams")
+getMetaInfo = InsightMethod("GetMetaInfo","metainfo","","MetaInfo")
+getFirmwareVersion = InsightMethod("GetFirmwareVersion","firmwareupdate","","FirmwareVersion")
+getAccessPointList = InsightMethod("GetApList","WiFiSetup","")
+
+def init():
+    r = None
+    i = 100
+    error("#establishing connection and turning on")
+    while r==None and i>0:
+        r=turnOn.call()
+        i-=1
+    error("#found device "+getName.call())
+    error("#meta: "+getMetaInfo.call())
+    error("#firmware: "+getFirmwareVersion.call())
+    error("#serialno: "+getSerialNo.call())
+    error("#reset power threshold: "+setPowerThreshold0.call())
 
 
-def logEnergy(name):    
+def logEnergy(name):
         i = 0
         while True:
-			i+=1
-			if(i % 100 == 1):
-				r=turn_on()
-                                if (r==None):
-                                      i = 0
-                        result = read_sensors()
-                        if (result!=None):
-                           sys.stdout.write(name+": "+str(result)+"\n")
-                           sys.stdout.flush()
-			time.sleep(1)
+            i+=1
+            if(i % 50 == 1):
+                r=turnOn.call()
+                if (r==None):
+                    i = 0
+            result = read_sensors()
+            if (result!=None):
+                    sys.stdout.write(name+" - "+time.strftime("%Y-%m-%d %H:%M:%S")+": "+str(result)+"\n")
+                    sys.stdout.flush()
+            time.sleep(1)
          
             
 def error(msg):
@@ -214,6 +175,7 @@ def main(arguments):
 
         print "listening for "+name+" at "+HOST+" ("+IP+")"
 
+        init()
         logEnergy(name)
 
     except IndexError:
