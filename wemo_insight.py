@@ -145,7 +145,7 @@ def init():
     error("#reset power threshold: "+setPowerThreshold0.call())
 
 
-def logEnergy(name):
+def logEnergy():
         i = 0
         while True:
             i+=1
@@ -155,7 +155,7 @@ def logEnergy(name):
                     i = 0
             result = read_sensors()
             if (result!=None):
-                    sys.stdout.write(name+" - "+time.strftime("%Y-%m-%d %H:%M:%S")+": "+str(result)+"\n")
+                    sys.stdout.write(time.strftime("%Y-%m-%d %H:%M:%S")+": "+str(result)+"\n")
                     sys.stdout.flush()
             time.sleep(1)
          
@@ -170,16 +170,15 @@ def main(arguments):
 
     try:
         HOST = arguments[1]
-        IP = socket.gethostbyname(HOST) 
-        name = arguments[2]
+        IP = socket.gethostbyname(HOST)
 
-        print "listening for "+name+" at "+HOST+" ("+IP+")"
+        print "listening at "+HOST+" ("+IP+")"
 
         init()
-        logEnergy(name)
+        logEnergy()
 
     except IndexError:
-        print "Insufficient parameters. Expecting hostname (or IP) and a name"
+        print "Insufficient parameters. Expecting hostname (or IP)"
         sys.exit(1)
     
     
