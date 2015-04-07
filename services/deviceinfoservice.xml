@@ -1,0 +1,33 @@
+﻿<?xml version="1.0"?>
+<scpd xmlns="urn:Belkin:service-1-0">
+
+  <specVersion>
+    <major>1</major>
+    <minor>0</minor>
+  </specVersion>
+  
+  <actionList>
+    <action>
+	<name>GetDeviceInformation</name>
+	<argumentList>
+	    <argument>
+		<retval />
+		<name>DeviceInformation</name>
+		<relatedStateVariable>DeviceInformation</relatedStateVariable>
+		<direction>out</direction>
+	    </argument>
+	</argumentList>
+    </action>
+</actionList>
+
+  <serviceStateTable>
+  
+    <stateVariable sendEvents="yes">
+      <name>DeviceInformation</name>
+      <dataType>string</dataType>
+      <defaultValue>0</defaultValue>
+    </stateVariable>
+
+  </serviceStateTable>
+  
+  </scpd>
