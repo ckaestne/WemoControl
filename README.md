@@ -12,3 +12,6 @@ It logs the IP and the current power reading in milliwatts as reported by the We
 The script disables auto-off and repeatedly sends a command to turn the meter on.
 
 Typically one would run this as `nohup python wemo_insight.py HOST > log 2> errorlog &` to log both measurements and errors into files.
+
+
+Adapted from an earlier version developed at the Synergy lab @ CMU.
